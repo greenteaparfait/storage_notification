@@ -14,6 +14,7 @@ import math
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
 import time
+from google.appengine.api import urlfetch
 
 class MainPage(webapp2.RequestHandler):
 
@@ -110,8 +111,40 @@ class MainPage(webapp2.RequestHandler):
     timeDomain = np.zeros(num_data)
     for i in range(1,num_data-2):  # Skip 0th line
       time[i] = sampleArray[i][0]/1000000 + time[i-1] # Accumulation of sampling interval
-      timeDomain[i] = sampleArray[i][1] 
+      timeDomain[i] = sampleArray[i][1]  # Copying to timeDomain array
+
+    """ Preparation of json data to send to compute engine for linear regression """    
+    timeList = time.tolist()
+    timeDomainList = timeDomain.tolist()
+
+    # For checking
+    #for i in range(0,10):
+    #  logging.info('%s %s',str(timeList[i]), str(timeDomainList[i]))
       
+    form_fields = {
+        'time' : timeList,
+        'timeDomain' : timeDomainList    
+    }
+    form_data = json.dumps(form_fields)  
+    headers = {'Content-Type': 'application/json'}  
+    
+    """ Sending json to compute engine """
+    result = urlfetch.fetch(
+                url='http://104.196.190.227/',
+                payload=form_data,
+                method=urlfetch.POST,
+                headers=headers)
+    
+    """ Receving linear regression results for leveling timeDomain data """
+    jsonreturn = json.loads(result.content)  # Converting to dic type
+    slope = str(jsonreturn['slope'])
+    intercept = str(jsonreturn['intercept'])
+    logging.info('Regression result, Slope: %s', slope)
+    logging.info('Regression result, Intercept: %s', intercept)    
+    
+    """ Leveling timeDomain data """
+        
+    
     length = num_data-2 # Length of data = number of data-2 
     aveSamInt = time[num_data-3]/length  # Average sample internal
     logging.info('Number of data : %s', str(length))
