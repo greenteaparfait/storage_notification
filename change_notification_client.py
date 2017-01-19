@@ -80,7 +80,17 @@ class MainPage(webapp2.RequestHandler):
       value = y + a*math.exp(-1*math.exp(-1*function1(x)) - function1(x) + 1 )
       return value
 #[END extfit]  	
-  	 
+
+#[START Highpass Filter]
+    def hipassfilter(x):
+      f0 = 0.75
+      a = 0.975
+      b = 0.025
+      k = 10
+      value = -1*b + a/(1 + math.exp( -1*k*(x + -1*f0)) ) 
+      return value
+#[END Highpass Filter]  	
+    	  	 
   	 # Creating Datastack class for saving roughness data
     class Datastack(ndb.Model):
             material = ndb.StringProperty()            
@@ -107,8 +117,8 @@ class MainPage(webapp2.RequestHandler):
         #logging.info('%s %s %s', str(index), str(i), fragmented_line[i])
      
     """ Put time data into sampleArray[i][0] and time domain signal into timeDomain[i] """
-    time = np.zeros(num_data)
-    timeDomain = np.zeros(num_data)
+    time = np.zeros(num_data-2)
+    timeDomain = np.zeros(num_data-2)
     for i in range(1,num_data-2):  # Skip 0th line
       time[i] = sampleArray[i][0]/1000000 + time[i-1] # Accumulation of sampling interval
       timeDomain[i] = sampleArray[i][1]  # Copying to timeDomain array
@@ -143,7 +153,8 @@ class MainPage(webapp2.RequestHandler):
     logging.info('Regression result, Intercept: %s', intercept)    
     
     """ Leveling timeDomain data """
-        
+    for i in range(1,num_data-2):
+    	timeDomain[i] = timeDomain[i] - time[i]*float(slope)    
     
     length = num_data-2 # Length of data = number of data-2 
     aveSamInt = time[num_data-3]/length  # Average sample internal
@@ -160,22 +171,32 @@ class MainPage(webapp2.RequestHandler):
 
     plt.subplot(2,3,2)  # Plot for FFT in dB in frequency axis
     # k = frequency vector
+    #pad = np.zeros(length*32)
+    #pad1 = np.append(pad,timeDomain)
+    #pad2 = np.append(pad1,pad)
     k = np.arange(length)
     # T = Total length of duration    
     T = length*aveSamInt 
     frq = k/T
     freq = frq[range(length/2)]   
-    Y = np.fft.fft(timeDomain)/length       
+    Y = np.fft.fft(timeDomain)/(length)       
     Y = Y[range(length/2)]
+    
+    """ Applying highpass filter to remove low freq noise """
+    for i in range(0, length/2):
+    	Y[i] = Y[i]*hipassfilter(freq[i])    
+    
     Y2 = np.zeros(length/2)  # For displaying Y in dB        
     for i in range(1,length/2):
       Y2[i] = 10*math.log(abs(Y[i]),10)
     plt.ylim(-10,30)
+    plt.xlim(0,100)
     plt.plot(freq, Y2, 'r-')
     plt.xlabel('freq (Hz)')
     plt.ylabel('|Y(freq) dB|')
 
     lamda = np.zeros(length/2)  # Lamda as Period length
+    lamda[0] = 20    
     ExtremeFit = np.zeros(length/2)
     for i in range(1, length/2):
       lamda[i] = 10/freq[i]  # 1cm/sec = 10 mm/sec, lamda = 10 mm/sec divided by freq
@@ -184,18 +205,18 @@ class MainPage(webapp2.RequestHandler):
     plt.subplot(2,3,3)  # Plot for FFT in amplitude in period axis
     plt.xlim(0,20)
     plt.ylim(-30,30)
-    plt.plot(lamda, Y, 'r^')
+    plt.plot(lamda, Y, 'r-')
     plt.xlabel('Period (mm)')
     plt.ylabel('Y(mm) in Amp')
 
     plt.subplot(2,3,4)  # Plot for Extreme Fit function in period
     plt.xlim(0,20)
-    plt.plot(lamda, ExtremeFit, 'k*')
+    plt.plot(lamda, ExtremeFit, 'k-')
     plt.xlabel('Period (mm)')
     plt.ylabel('Extreme Fit Function')
 
     plt.subplot(2,3,5)  # Plot for Abs(FFT) in period
-    plt.plot(lamda, abs(Y), 'r^')
+    plt.plot(lamda, abs(Y), 'r-')
     plt.xlim(0,20)
     plt.ylim(0,30)
     plt.xlabel('Period (mm)')
@@ -205,7 +226,7 @@ class MainPage(webapp2.RequestHandler):
     Z = np.zeros(length/2)
     for i in range(1, length/2):
       Z[i] = sampleArray[i][0]/1000000*math.fabs(Y[i])*extfit(lamda[i])
-    plt.plot(lamda, Z, 'r^')
+    plt.plot(lamda, Z, 'r-')
     plt.xlim(0,20)
     plt.xlabel('Period (mm)')
     plt.ylabel('|Z(Period)|')
