@@ -166,46 +166,42 @@ class MainPage(webapp2.RequestHandler):
     """[START] Plotting and saving """
     plt.subplot(2,3,1)  # Plot for time-domain signal
     plt.plot(time, timeDomain, 'k-')
-    plt.xlabel('time')
+    plt.xlabel('time (s)')
     plt.ylabel('amplitude')
 
     plt.subplot(2,3,2)  # Plot for FFT in dB in frequency axis
-    # k = frequency vector
-    #pad = np.zeros(length*32)
-    #pad1 = np.append(pad,timeDomain)
-    #pad2 = np.append(pad1,pad)
-    k = np.arange(length)
-    # T = Total length of duration    
-    T = length*aveSamInt 
-    frq = k/T
-    freq = frq[range(length/2)]   
-    Y = np.fft.fft(timeDomain)/(length)       
-    Y = Y[range(length/2)]
-    
+    pad = np.zeros(length*15.5)  # zero padding by 32 times in total length
+    pad1 = np.append(pad,timeDomain)
+    pad2 = np.append(pad1,pad)   # zero-padded timeDomain
+    padlen = len(pad2)
+    Y = np.fft.rfft(pad2)   # rfft calculates only positive frequency.
+    logging.info('length of padded data : %s', str(padlen))
+    logging.info('length of FFT result : %s', str(len(Y)))
+    freq = np.linspace(0, np.around(1/aveSamInt/2), str(len(Y)))   
+    logging.info('Length of freq window : %s', str(len(freq)))    # length of freq = length of Y
     """ Applying highpass filter to remove low freq noise """
-    for i in range(0, length/2):
+    for i in range(0, len(freq)):
     	Y[i] = Y[i]*hipassfilter(freq[i])    
-    
-    Y2 = np.zeros(length/2)  # For displaying Y in dB        
-    for i in range(1,length/2):
+    Y2 = np.zeros(len(freq))  # For displaying Y in dB        
+    for i in range(0,len(freq)):
       Y2[i] = 10*math.log(abs(Y[i]),10)
-    plt.ylim(-10,30)
+    #plt.ylim(-1,1)
     plt.xlim(0,100)
     plt.plot(freq, Y2, 'r-')
     plt.xlabel('freq (Hz)')
     plt.ylabel('|Y(freq) dB|')
 
-    lamda = np.zeros(length/2)  # Lamda as Period length
-    lamda[0] = 20    
-    ExtremeFit = np.zeros(length/2)
-    for i in range(1, length/2):
+    lamda = np.zeros(len(freq))  # Lamda as Period length
+    lamda[0]=20
+    ExtremeFit = np.zeros(len(freq))
+    for i in range(1, len(freq)):
       lamda[i] = 10/freq[i]  # 1cm/sec = 10 mm/sec, lamda = 10 mm/sec divided by freq
       ExtremeFit[i] = extfit(lamda[i])
 
     plt.subplot(2,3,3)  # Plot for FFT in amplitude in period axis
     plt.xlim(0,20)
-    plt.ylim(-30,30)
-    plt.plot(lamda, Y, 'r-')
+    #plt.ylim(-30,30)
+    plt.plot(lamda, Y2, 'r-')
     plt.xlabel('Period (mm)')
     plt.ylabel('Y(mm) in Amp')
 
@@ -216,16 +212,16 @@ class MainPage(webapp2.RequestHandler):
     plt.ylabel('Extreme Fit Function')
 
     plt.subplot(2,3,5)  # Plot for Abs(FFT) in period
-    plt.plot(lamda, abs(Y), 'r-')
+    plt.plot(lamda, abs(Y2), 'r-')
     plt.xlim(0,20)
-    plt.ylim(0,30)
+    #plt.ylim(0,30)
     plt.xlabel('Period (mm)')
     plt.ylabel('|Y(mm) in Amp|')
 
     plt.subplot(2,3,6)  # Plot for Abs(FFT)*Extfit in period
-    Z = np.zeros(length/2)
-    for i in range(1, length/2):
-      Z[i] = sampleArray[i][0]/1000000*math.fabs(Y[i])*extfit(lamda[i])
+    Z = np.zeros(len(freq))
+    for i in range(1, len(freq)):
+      Z[i] = aveSamInt*math.fabs(Y2[i])*extfit(lamda[i])
     plt.plot(lamda, Z, 'r-')
     plt.xlim(0,20)
     plt.xlabel('Period (mm)')
